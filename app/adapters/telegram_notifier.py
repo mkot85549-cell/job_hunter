@@ -1,4 +1,5 @@
 import html
+
 from aiogram import Bot
 from aiogram.enums import ParseMode
 
@@ -12,16 +13,19 @@ class AiogramNotificationSender:
 
     async def send_invitation_alert(self, invitation: Invitation) -> None:
         safe_title = html.escape(invitation.vacancy_title)
+        safe_url = html.escape(invitation.vacancy_url, quote=True)
         safe_text = html.escape(invitation.message_text[:1500])
 
         if invitation.telegram_tags:
-            tags_block = ", ".join(f"<code>{html.escape(t)}</code>" for t in invitation.telegram_tags)
+            tags_block = ", ".join(
+                f"<code>{html.escape(t)}</code>" for t in invitation.telegram_tags
+            )
         else:
             tags_block = "<i>Не найден автоматически (проверь текст ниже)</i>"
 
         message = (
             f"🎯 <b>Новый положительный отклик!</b>\n\n"
-            f"📌 <b>Вакансия:</b> <a href='{invitation.vacancy_url}'>{safe_title}</a>\n"
+            f"📌 <b>Вакансия:</b> <a href='{safe_url}'>{safe_title}</a>\n"
             f"📲 <b>Теги ТГ:</b> {tags_block}\n\n"
             f"💬 <b>Текст приглашения:</b>\n"
             f"<blockquote expandable>{safe_text}</blockquote>"

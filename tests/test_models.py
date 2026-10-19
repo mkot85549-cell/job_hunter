@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import ValidationError
-from app.config import Settings
+
+from app.config import Settings, settings_defaults_from_config
 from app.db.models import (
     ITEM_TYPE_INVITATION,
     ITEM_TYPE_OFFERED,
@@ -18,7 +19,7 @@ from app.db.models import (
 
 
 class TestConfigOwnerChatId:
-    """Проверка обязательности OWNER_CHAT_ID в конфигурации."""
+    """Проверка обязательности OWNER_CHAT_ID / TELEGRAM_CHAT_ID в конфигурации."""
 
     def test_missing_owner_chat_id_raises_validation_error(self) -> None:
         """Если OWNER_CHAT_ID не передан, Settings не должен инициализироваться."""
@@ -26,24 +27,58 @@ class TestConfigOwnerChatId:
             Settings(  # type: ignore[call-arg]
                 _env_file=None,
                 bot_token="fake:token",
-                telegram_chat_id=123,
                 database_url="postgresql+asyncpg://u:p@db/db",
                 hh_access_token="fake_token",
                 hh_resume_id="fake_resume",
-                # owner_chat_id намеренно не передан
+                # owner_chat_id и telegram_chat_id намеренно не переданы
             )
 
-    def test_owner_chat_id_parsed(self) -> None:
+    def test_owner_chat_id_from_owner_chat_id_field(self) -> None:
         cfg = Settings(  # type: ignore[call-arg]
             _env_file=None,
             bot_token="fake:token",
-            telegram_chat_id=123,
             owner_chat_id=456,
             database_url="postgresql+asyncpg://u:p@db/db",
             hh_access_token="fake_token",
             hh_resume_id="fake_resume",
         )
         assert cfg.owner_chat_id == 456
+        assert cfg.telegram_chat_id == 456
+
+    def test_owner_chat_id_from_telegram_chat_id_alias(self) -> None:
+        """Старые конфиги с TELEGRAM_CHAT_ID продолжают работать штатно."""
+        cfg = Settings(  # type: ignore[call-arg]
+            _env_file=None,
+            bot_token="fake:token",
+            telegram_chat_id=789,
+            database_url="postgresql+asyncpg://u:p@db/db",
+            hh_access_token="fake_token",
+            hh_resume_id="fake_resume",
+        )
+        assert cfg.owner_chat_id == 789
+        assert cfg.telegram_chat_id == 789
+
+    def test_settings_defaults_from_config_helper(self) -> None:
+        cfg = Settings(  # type: ignore[call-arg]
+            _env_file=None,
+            bot_token="fake:token",
+            owner_chat_id=123,
+            database_url="postgresql+asyncpg://u:p@db/db",
+            hh_access_token="fake_token",
+            hh_resume_id="fake_resume",
+            search_query="Python Backend",
+            remote_only=True,
+            required_keywords=["fastapi"],
+            excluded_keywords=["1c"],
+        )
+        defaults = settings_defaults_from_config(cfg)
+        assert defaults == {
+            "default_query": "Python Backend",
+            "default_auto_mode": True,
+            "default_remote_only": True,
+            "default_required_keywords": ["fastapi"],
+            "default_excluded_keywords": ["1c"],
+        }
 
 
 class TestItemTypeConstants:
@@ -148,10 +183,17 @@ class TestUserSettingsRepository:
 
         assert result is existing
 
-    async def test_get_or_create_creates_when_missing(self) -> None:
+    async def test_get_or_create_creates_atomic(self) -> None:
         mock_session = AsyncMock()
-        mock_session.add = MagicMock()
-        mock_session.scalar.return_value = None
+        created = UserSettings(
+            chat_id=456,
+            search_query="Python Junior",
+            is_auto_mode=True,
+            remote_only=True,
+            required_keywords=["fastapi"],
+            excluded_keywords=["1c"],
+        )
+        mock_session.scalar.return_value = created
 
         repo = UserSettingsRepository(mock_session)
         settings = await repo.get_or_create(
@@ -165,24 +207,18 @@ class TestUserSettingsRepository:
 
         assert settings.chat_id == 456
         assert settings.search_query == "Python Junior"
-        assert settings.is_auto_mode is True
-        assert settings.remote_only is True
-        assert settings.required_keywords == ["fastapi"]
-        assert settings.excluded_keywords == ["1c"]
-        mock_session.add.assert_called_once()
+        mock_session.execute.assert_called_once()
         mock_session.commit.assert_called_once()
-        mock_session.refresh.assert_called_once()
 
-    async def test_get_or_create_returns_existing(self) -> None:
+    async def test_get_or_create_empty_query_raises_value_error(self) -> None:
         mock_session = AsyncMock()
-        existing = UserSettings(chat_id=789, search_query="DevOps")
-        mock_session.scalar.return_value = existing
-
         repo = UserSettingsRepository(mock_session)
-        settings = await repo.get_or_create(chat_id=789)
 
-        assert settings is existing
-        mock_session.add.assert_not_called()
+        with pytest.raises(ValueError, match="search_query не может быть пустым"):
+            await repo.get_or_create(chat_id=123, default_query="")
+
+        with pytest.raises(ValueError, match="search_query не может быть пустым"):
+            await repo.get_or_create(chat_id=123, default_query="   ")
 
     async def test_update_settings_valid(self) -> None:
         mock_session = AsyncMock()
@@ -201,10 +237,29 @@ class TestUserSettingsRepository:
         mock_session.commit.assert_called_once()
         mock_session.refresh.assert_called_once()
 
+    async def test_update_settings_empty_query_raises_value_error(self) -> None:
+        mock_session = AsyncMock()
+        repo = UserSettingsRepository(mock_session)
+
+        with pytest.raises(ValueError, match="search_query не может быть пустым"):
+            await repo.update(chat_id=100, search_query="")
+
+        with pytest.raises(ValueError, match="search_query не может быть пустым"):
+            await repo.update(chat_id=100, search_query="   ")
+
+    async def test_update_settings_user_not_found_raises_value_error(self) -> None:
+        mock_session = AsyncMock()
+        mock_session.scalar.return_value = None
+        repo = UserSettingsRepository(mock_session)
+
+        with pytest.raises(ValueError, match="не найден"):
+            await repo.update(chat_id=999, is_auto_mode=True)
+
     async def test_update_settings_invalid_field_raises_value_error(self) -> None:
         mock_session = AsyncMock()
         repo = UserSettingsRepository(mock_session)
 
         with pytest.raises(ValueError, match="Недопустимое поле настроек"):
             await repo.update(chat_id=100, non_existent_key="bad")
+
 

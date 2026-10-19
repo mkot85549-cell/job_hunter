@@ -24,7 +24,7 @@ class PlatformSyncResult:
         return self.error is None
 
 
-async def retry_async(
+async def retry_async[T](
     func: Callable[[], Awaitable[T]],
     max_attempts: int = 3,
     base_delay: float = 1.0,

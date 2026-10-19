@@ -134,28 +134,37 @@ class UserSettingsRepository:
     async def get_or_create(
         self,
         chat_id: int,
-        default_query: str = "",
+        default_query: str,
         default_auto_mode: bool = True,
         default_remote_only: bool = True,
         default_required_keywords: list[str] | None = None,
         default_excluded_keywords: list[str] | None = None,
     ) -> UserSettings:
-        settings = await self.get(chat_id)
-        if settings is not None:
-            return settings
+        if not default_query or not default_query.strip():
+            raise ValueError("search_query не может быть пустым")
 
-        settings = UserSettings(
-            chat_id=chat_id,
-            is_auto_mode=default_auto_mode,
-            is_active=True,
-            search_query=default_query,
-            remote_only=default_remote_only,
-            required_keywords=default_required_keywords or [],
-            excluded_keywords=default_excluded_keywords or [],
+        # Атомарная вставка с игнорированием дубликата chat_id
+        # во избежание состояния гонки
+        stmt = (
+            insert(UserSettings)
+            .values(
+                chat_id=chat_id,
+                is_auto_mode=default_auto_mode,
+                is_active=True,
+                search_query=default_query.strip(),
+                remote_only=default_remote_only,
+                required_keywords=default_required_keywords or [],
+                excluded_keywords=default_excluded_keywords or [],
+            )
+            .on_conflict_do_nothing(index_elements=["chat_id"])
         )
-        self._session.add(settings)
+        await self._session.execute(stmt)
         await self._session.commit()
-        await self._session.refresh(settings)
+
+        settings = await self.get(chat_id)
+        if settings is None:
+            msg = f"Не удалось получить UserSettings для chat_id={chat_id}"
+            raise RuntimeError(msg)
         return settings
 
     async def update(self, chat_id: int, **kwargs: Any) -> UserSettings:
@@ -166,9 +175,22 @@ class UserSettingsRepository:
                     f"Разрешенные поля: {sorted(ALLOWED_USER_SETTINGS_FIELDS)}"
                 )
 
-        settings = await self.get_or_create(chat_id)
+        if "search_query" in kwargs:
+            val = kwargs["search_query"]
+            if not isinstance(val, str) or not val.strip():
+                raise ValueError("search_query не может быть пустым")
+            kwargs["search_query"] = val.strip()
+
+        settings = await self.get(chat_id)
+        if settings is None:
+            raise ValueError(
+                f"Пользователь с chat_id={chat_id} не найден. "
+                "Сначала вызовите get_or_create."
+            )
+
         for key, value in kwargs.items():
             setattr(settings, key, value)
         await self._session.commit()
         await self._session.refresh(settings)
-        return settings
+        return settings
+

@@ -12,7 +12,6 @@ from app.adapters.platforms import HeadHunterClient, SuperJobClient
 from app.adapters.telegram_notifier import AiogramNotificationSender
 from app.core.job_hunter import Invitation, WorkSchedule
 
-
 # ────────────────────────────────────────────────
 #  AiogramNotificationSender
 # ────────────────────────────────────────────────
@@ -125,7 +124,9 @@ class TestAiogramNotificationSender:
 # ────────────────────────────────────────────────
 
 
-def _hh_transport(handler: httpx._transports.base.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
+def _hh_transport(
+    handler: httpx._transports.base.AsyncBaseTransport | None = None,
+) -> httpx.AsyncClient:
     """Создаёт httpx.AsyncClient с мок-транспортом."""
 
     async def default_handler(request: httpx.Request) -> httpx.Response:
@@ -149,12 +150,16 @@ class TestHeadHunterClient:
                         "requirement": "Знание Python",
                         "responsibility": "Писать код",
                     },
+                    "employer": {"name": "Яндекс"},
+                    "salary": {"from": 150000, "to": 250000, "currency": "RUR"},
                     "alternate_url": "https://hh.ru/vacancy/12345",
                 },
                 {
                     "id": "67890",
                     "name": "Go Developer",
                     "snippet": None,
+                    "employer": None,
+                    "salary": None,
                     "alternate_url": "https://hh.ru/vacancy/67890",
                 },
             ]
@@ -162,6 +167,8 @@ class TestHeadHunterClient:
 
         async def handler(request: httpx.Request) -> httpx.Response:
             assert "/vacancies" in str(request.url)
+            assert "schedule=remote" in str(request.url)
+            assert "work_format=REMOTE" in str(request.url)
             return httpx.Response(200, json=api_response)
 
         async with _hh_transport(handler) as http_client:
@@ -170,15 +177,35 @@ class TestHeadHunterClient:
                 access_token="test-token",
                 resume_id="resume-1",
             )
-            vacancies = await client.fetch_vacancies("python")
+            vacancies = await client.fetch_vacancies("python", remote_only=True)
 
         assert len(vacancies) == 2
         assert vacancies[0].external_id == "12345"
         assert vacancies[0].title == "Python Developer"
         assert vacancies[0].schedule == WorkSchedule.REMOTE
+        assert vacancies[0].company == "Яндекс"
+        assert vacancies[0].salary == "150 000 – 250 000 ₽"
         assert "Знание Python" in vacancies[0].description
-        # snippet=None — описание не падает
+        # snippet=None и salary=None
         assert vacancies[1].external_id == "67890"
+        assert vacancies[1].company is None
+        assert vacancies[1].salary is None
+
+    async def test_fetch_vacancies_remote_only_false_omits_schedule(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            assert "schedule" not in str(request.url)
+            assert "work_format" not in str(request.url)
+            return httpx.Response(200, json={"items": []})
+
+        async with _hh_transport(handler) as http_client:
+            client = HeadHunterClient(
+                http_client=http_client,
+                access_token="test-token",
+                resume_id="resume-1",
+            )
+            vacancies = await client.fetch_vacancies("python", remote_only=False)
+
+        assert vacancies == []
 
     async def test_fetch_vacancies_empty_response(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:
@@ -208,7 +235,9 @@ class TestHeadHunterClient:
             with patch("app.adapters.platforms.asyncio.sleep", new_callable=AsyncMock):
                 result = await client.apply_to_vacancy("123", "Cover letter")
 
-        assert result is True
+        assert result.ok is True
+        assert bool(result) is True
+        assert result.status_code == 201
 
     async def test_apply_to_vacancy_returns_false_on_409(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:
@@ -223,7 +252,50 @@ class TestHeadHunterClient:
             with patch("app.adapters.platforms.asyncio.sleep", new_callable=AsyncMock):
                 result = await client.apply_to_vacancy("123", "Cover letter")
 
-        assert result is False
+        assert result.ok is False
+        assert bool(result) is False
+        assert result.status_code == 409
+        assert "Уже откликнулись" in (result.reason or "")
+
+    async def test_apply_to_vacancy_403_test_required(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                403,
+                json={"errors": [{"type": "test_required"}]},
+            )
+
+        async with _hh_transport(handler) as http_client:
+            client = HeadHunterClient(
+                http_client=http_client,
+                access_token="test-token",
+                resume_id="resume-1",
+            )
+            with patch("app.adapters.platforms.asyncio.sleep", new_callable=AsyncMock):
+                result = await client.apply_to_vacancy("123", "Cover letter")
+
+        assert result.ok is False
+        assert result.status_code == 403
+        assert result.reason == "Требуется прохождение теста"
+
+    async def test_apply_to_vacancy_403_letter_required(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                403,
+                json={"errors": [{"type": "message_required"}]},
+            )
+
+        async with _hh_transport(handler) as http_client:
+            client = HeadHunterClient(
+                http_client=http_client,
+                access_token="test-token",
+                resume_id="resume-1",
+            )
+            with patch("app.adapters.platforms.asyncio.sleep", new_callable=AsyncMock):
+                result = await client.apply_to_vacancy("123", "Cover letter")
+
+        assert result.ok is False
+        assert result.status_code == 403
+        assert result.reason == "Требуется обязательное сопроводительное письмо"
 
     async def test_fetch_invitations_parses_messages(self) -> None:
         negotiations_response = {
@@ -346,7 +418,8 @@ class TestSuperJobClient:
             with patch("app.adapters.platforms.asyncio.sleep", new_callable=AsyncMock):
                 result = await client.apply_to_vacancy("111", "Cover")
 
-        assert result is True
+        assert result.ok is True
+        assert bool(result) is True
 
     async def test_apply_returns_false_on_403(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:
@@ -362,7 +435,8 @@ class TestSuperJobClient:
             with patch("app.adapters.platforms.asyncio.sleep", new_callable=AsyncMock):
                 result = await client.apply_to_vacancy("111", "Cover")
 
-        assert result is False
+        assert result.ok is False
+        assert bool(result) is False
 
     async def test_fetch_invitations_parses_objects(self) -> None:
         api_response = {

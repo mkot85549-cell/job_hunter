@@ -25,8 +25,15 @@ async def run_polling_cycle(
     search_query: str,
 ) -> None:
     """Один цикл: откликнуться на новые вакансии и проверить ответы."""
+    if not search_query or not search_query.strip():
+        logger.warning(
+            "Поисковый запрос пуст. Пропуск цикла поиска для платформы %s",
+            platform_name,
+        )
+        return
+
     applied_ids = await repo.get_processed_ids(platform_name, "vacancy")
-    new_applied = await service.search_and_apply(search_query, applied_ids)
+    new_applied = await service.search_and_apply(search_query.strip(), applied_ids)
     await repo.mark_as_processed(platform_name, "vacancy", new_applied)
     logger.info(
         "Платформа %s: отправлено новых откликов: %d",
