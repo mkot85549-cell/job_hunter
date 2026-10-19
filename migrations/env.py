@@ -1,9 +1,9 @@
 """Alembic env.py — async-миграции для PostgreSQL через asyncpg."""
 
 import asyncio
-from logging.config import fileConfig
 import os
 import sys
+from logging.config import fileConfig
 
 # Добавляем корень проекта в sys.path
 sys.path.insert(0, os.path.abspath("."))

@@ -8,8 +8,11 @@ import time
 import httpx
 import pytest
 
-from app.core.orchestrator import MultiPlatformOrchestrator, PlatformSyncResult, retry_async
-
+from app.core.orchestrator import (
+    MultiPlatformOrchestrator,
+    PlatformSyncResult,
+    retry_async,
+)
 
 # ────────────────────────────────────────────────
 #  PlatformSyncResult
@@ -81,20 +84,22 @@ class TestRetryAsync:
         for status_code in (400, 401, 403, 404):
             attempts = 0
 
-            async def fail_with_client_error() -> str:
+            async def fail_with_client_error(code: int = status_code) -> str:
                 nonlocal attempts
                 attempts += 1
                 req = httpx.Request("GET", "https://api.example.com")
-                resp = httpx.Response(status_code, request=req)
+                resp = httpx.Response(code, request=req)
                 raise httpx.HTTPStatusError("Client error", request=req, response=resp)
 
             with pytest.raises(httpx.HTTPStatusError) as exc_info:
-                await retry_async(fail_with_client_error, max_attempts=3, base_delay=0.01)
+                await retry_async(
+                    fail_with_client_error, max_attempts=3, base_delay=0.01
+                )
             assert exc_info.value.response.status_code == status_code
             assert attempts == 1  # Только одна попытка, без ретрая
 
     async def test_retries_on_500_then_raises(self) -> None:
-        """Серверные 5xx ретраятся, но если все попытки исчерпаны — бросается последнее исключение."""
+        """Серверные 5xx ретраятся, но при исчерпании попыток бросается ошибка."""
         attempts = 0
 
         async def always_500() -> str:

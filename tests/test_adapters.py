@@ -12,7 +12,6 @@ from app.adapters.platforms import HeadHunterClient, SuperJobClient
 from app.adapters.telegram_notifier import AiogramNotificationSender
 from app.core.job_hunter import Invitation, WorkSchedule
 
-
 # ────────────────────────────────────────────────
 #  AiogramNotificationSender
 # ────────────────────────────────────────────────
@@ -125,7 +124,9 @@ class TestAiogramNotificationSender:
 # ────────────────────────────────────────────────
 
 
-def _hh_transport(handler: httpx._transports.base.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
+def _hh_transport(
+    handler: httpx._transports.base.AsyncBaseTransport | None = None,
+) -> httpx.AsyncClient:
     """Создаёт httpx.AsyncClient с мок-транспортом."""
 
     async def default_handler(request: httpx.Request) -> httpx.Response:

@@ -6,8 +6,6 @@ readme = "README.md"
 requires-python = ">=3.14"
 
 dependencies = [
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
     "aiogram>=3.15.0",
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30.0",
@@ -34,6 +32,9 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-v --tb=short --strict-markers"
+markers = [
+    "integration: тесты, требующие реального подключения к PostgreSQL",
+]
 
 # ==========================================
 # Настройки линтера и форматтера Ruff
@@ -65,6 +66,9 @@ select = [
 ]
 ignore = [
     "ANN401", # Разрешаем typing.Any там, где без него не обойтись (например, в декораторах)
+    "RUF001", # Разрешаем кириллицу в строках
+    "RUF002", # Разрешаем кириллицу в docstrings
+    "RUF003", # Разрешаем кириллицу в комментариях
 ]
 
 [tool.ruff.lint.per-file-ignores]

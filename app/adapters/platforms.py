@@ -1,4 +1,5 @@
 import asyncio
+
 import httpx
 
 from app.core.job_hunter import Invitation, Vacancy, WorkSchedule
@@ -41,7 +42,9 @@ class HeadHunterClient:
         vacancies: list[Vacancy] = []
         for item in data.get("items", []):
             snippet = item.get("snippet") or {}
-            description = f"{snippet.get('requirement', '')} {snippet.get('responsibility', '')}"
+            req = snippet.get("requirement", "") or ""
+            resp = snippet.get("responsibility", "") or ""
+            description = f"{req} {resp}".strip()
             vacancies.append(
                 Vacancy(
                     external_id=str(item["id"]),

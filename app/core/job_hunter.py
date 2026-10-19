@@ -80,13 +80,13 @@ def is_vacancy_suitable(
         if not (is_marked_remote or mentions_remote):
             return False
 
-    if criteria.excluded_keywords:
-        if any(word.lower() in full_text for word in criteria.excluded_keywords):
-            return False
+    if criteria.excluded_keywords and any(
+        word.lower() in full_text for word in criteria.excluded_keywords
+    ):
+        return False
 
     if criteria.required_keywords:
-        if not any(word.lower() in full_text for word in criteria.required_keywords):
-            return False
+        return any(word.lower() in full_text for word in criteria.required_keywords)
 
     return True
 

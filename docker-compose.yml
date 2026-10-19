@@ -23,7 +23,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: sh -c "alembic upgrade head && python -m app.main"
 
 volumes:
   pgdata:
