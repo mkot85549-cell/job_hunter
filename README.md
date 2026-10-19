@@ -4,17 +4,32 @@
 
 ---
 
-## Переменные окружения (.env)
+## 📦 Предварительные требования и зависимости
 
-Создайте файл `.env` в корне проекта (на основе `.env.example`):
+### Вариант 1. Запуск через Docker (рекомендуется)
+Если вы запускаете проект через Docker, **устанавливать Python, библиотеки и PostgreSQL на свой компьютер не нужно**. Достаточно иметь:
+- **Docker Desktop** (для Windows/macOS) или `docker` + `docker compose` (для Linux).
+
+### Вариант 2. Локальный запуск (без Docker)
+- **Python 3.14+** (или 3.12+).
+- **PostgreSQL 16** (локально или через `docker compose up -d db`).
+- Установка зависимостей проекта:
+  - **Через `uv` (быстро):** `uv sync --all-groups`
+  - **Через `pip`:** `pip install -r requirements.txt`
+
+---
+
+## ⚙️ Переменные окружения (.env)
+
+Создайте файл `.env` в корне проекта (на основе шаблона `.env.example`):
 
 | Переменная | Обязательная | Описание |
 |---|:---:|---|
 | `BOT_TOKEN` | Да | Токен Telegram-бота от `@BotFather` |
-| `OWNER_CHAT_ID` | Да | Telegram ID владельца бота (число). Доступ разрешен только этому ID. |
-| `DATABASE_URL` | Да | Строка подключения к PostgreSQL: `postgresql+asyncpg://postgres:postgres@db:5432/jobhunter` |
-| `HH_ACCESS_TOKEN` | Да | OAuth Access Token API HeadHunter |
-| `HH_RESUME_ID` | Да | ID резюме на HeadHunter для отправки откликов |
+| `OWNER_CHAT_ID` | Да | Числовой Telegram ID владельца (узнать: [@userinfobot](https://t.me/userinfobot)) |
+| `DATABASE_URL` | Да | Подключение к PostgreSQL: `postgresql+asyncpg://postgres:postgres@db:5432/jobhunter` |
+| `HH_ACCESS_TOKEN` | Да | OAuth Access Token API HeadHunter (см. [launch_guide.md](launch_guide.md)) |
+| `HH_RESUME_ID` | Да | 32-символьный хэш резюме с HeadHunter |
 | `SEARCH_QUERY` | Нет | Начальный поисковый запрос (по умолчанию: `Оператор чата OR Менеджер OR Поддержка`) |
 | `REMOTE_ONLY` | Нет | Искать только удаленную работу (`true`/`false`, по умолчанию: `true`) |
 | `POLL_INTERVAL_SECONDS` | Нет | Интервал между циклами поиска в секундах (по умолчанию: `300`) |
@@ -25,7 +40,7 @@
 
 ---
 
-## Миграции базы данных (Alembic)
+## 🗄️ Миграции базы данных (Alembic)
 
 Для применения миграций на **любой** базе данных (как на чистой, так и на существующей рабочей базе со старыми таблицами) используется **одна команда**:
 
@@ -38,7 +53,7 @@ alembic upgrade head
 
 ---
 
-## Команды управления ботом
+## 💬 Команды управления ботом
 
 Доступ к командам разрешён строго владельцу (`OWNER_CHAT_ID`), сообщения от других пользователей молча игнорируются:
 
@@ -55,42 +70,51 @@ alembic upgrade head
 
 ---
 
-## Запуск проекта
+## 🚀 Запуск проекта
 
-### 1. Запуск через Docker Compose (рекомендуется)
+### 1. Запуск через Docker Compose (24/7 в фоне, рекомендуется)
 
-Миграции накатываются автоматически перед запуском приложения:
+Миграции накатываются автоматически перед запуском приложения, а служба настроена на автоматический перезапуск при сбоях (`restart: always`):
 
 ```bash
+# Сборка и запуск в фоновом режиме
 docker compose up -d --build
+
+# Просмотр логов в реальном времени
+docker compose logs -f worker
+
+# Проверка статуса контейнеров
+docker compose ps
 ```
 
-### 2. Локальный запуск через `uv`
+### 2. Локальный запуск (без Docker)
 
 ```bash
-# Установка зависимостей
+# 1. Установка зависимостей (через uv или pip)
 uv sync
+# или: pip install -r requirements.txt
 
-# Применение миграций
+# 2. Накат миграций
 uv run alembic upgrade head
 
-# Запуск приложения
+# 3. Запуск приложения
 uv run python -m app.main
 ```
 
 ---
 
-## Тестирование
+## 🧪 Тестирование
 
 ### Unit-тесты
 ```bash
 uv run pytest
 ```
+*Результат: 87 passed, 5 skipped.*
 
 ### Интеграционные тесты на PostgreSQL
 Для проверки работы на реальном экземпляре PostgreSQL:
 
-```bash
+```powershell
 # 1. Запуск тестового контейнера Postgres на порту 5433
 docker compose -f docker-compose.test.yml up -d
 
@@ -103,3 +127,5 @@ uv run pytest -m integration
 # 4. Остановка тестового контейнера
 docker compose -f docker-compose.test.yml down -v
 ```
+
+Подробное пошаговое руководство по получению всех токенов и ключей находится в файле [launch_guide.md](launch_guide.md).
