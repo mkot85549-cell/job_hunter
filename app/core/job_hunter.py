@@ -1,4 +1,5 @@
 import re
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
@@ -8,6 +9,19 @@ TG_HANDLE_PATTERN = re.compile(
     r"(?:(?<![a-zA-Z0-9._%+-])@|(?:https?://)?(?:t\.me|telegram\.me)/)([a-zA-Z0-9_]{5,32})\b",
     re.IGNORECASE,
 )
+
+
+@dataclass(slots=True, frozen=True)
+class ApplyResult:
+    """Результат отклика на вакансию."""
+
+    ok: bool
+    status_code: int
+    reason: str | None = None
+
+    def __bool__(self) -> bool:
+        """Поддержка булевых проверок if result: для обратной совместимости."""
+        return self.ok
 
 
 class WorkSchedule(StrEnum):
@@ -23,6 +37,8 @@ class Vacancy(BaseModel):
     description: str
     schedule: WorkSchedule
     url: str
+    company: str | None = None
+    salary: str | None = None
 
 
 class Invitation(BaseModel):
@@ -40,14 +56,19 @@ class VacancyFilterCriteria(BaseModel):
 
 
 class JobPlatformClient(Protocol):
-    async def fetch_vacancies(self, search_query: str) -> list[Vacancy]:
+    async def fetch_vacancies(
+        self, search_query: str, remote_only: bool = True
+    ) -> list[Vacancy]:
         ...
 
-    async def apply_to_vacancy(self, vacancy_id: str, cover_letter: str) -> bool:
+    async def apply_to_vacancy(
+        self, vacancy_id: str, cover_letter: str
+    ) -> ApplyResult:
         ...
 
     async def fetch_invitations(self) -> list[Invitation]:
         ...
+
 
 
 class NotificationSender(Protocol):
