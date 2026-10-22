@@ -22,6 +22,20 @@ class Settings(BaseSettings):
     hh_access_token: SecretStr
     hh_resume_id: str
 
+    # SuperJob (опционально)
+    superjob_secret_key: SecretStr | None = None
+    superjob_access_token: SecretStr | None = None
+    superjob_resume_id: int | None = None
+
+    # Переключатели площадок (через Telegram-команду /platforms или .env)
+    enable_hh: bool = True
+    enable_zarplata: bool = True
+    enable_superjob: bool = False   # Требует отдельного API-ключа
+    enable_habr: bool = False
+    enable_avito: bool = False
+    enable_freelance_ru: bool = False
+    enable_workzilla: bool = False
+
     search_query: str = "Оператор чата OR Менеджер OR Поддержка"
     remote_only: bool = True
     required_keywords: list[str] = Field(default_factory=list)
@@ -36,6 +50,15 @@ class Settings(BaseSettings):
     def telegram_chat_id(self) -> int:
         """Алиас для обратной совместимости с кодом нотификатора."""
         return self.owner_chat_id
+
+    @property
+    def superjob_configured(self) -> bool:
+        """Проверяет, заданы ли все обязательные поля SuperJob."""
+        return (
+            self.superjob_secret_key is not None
+            and self.superjob_access_token is not None
+            and self.superjob_resume_id is not None
+        )
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -54,4 +77,3 @@ def settings_defaults_from_config(config: Settings) -> dict[str, Any]:
         "default_required_keywords": list(config.required_keywords),
         "default_excluded_keywords": list(config.excluded_keywords),
     }
-

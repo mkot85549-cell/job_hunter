@@ -72,6 +72,31 @@
 2. В адресной строке браузера будет ссылка: `https://hh.ru/resume/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX`.
 3. Скопируйте 32-символьный хэш `XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX`.
 
+### 2.4 SuperJob API-ключ (опционально)
+
+1. Зарегистрируйте приложение на [api.superjob.ru](https://api.superjob.ru/) → «Регистрация приложения».
+2. Получите **Secret Key** и **App ID**.
+3. Авторизуйтесь через OAuth 2.0:
+   ```text
+   https://www.superjob.ru/authorize/?client_id=ВАШ_APP_ID&redirect_uri=http://localhost
+   ```
+4. После редиректа обменяйте `code` на токен:
+   ```bash
+   curl -X POST https://api.superjob.ru/2.0/oauth2/access_token/ \
+     -d "client_id=ВАШ_APP_ID" \
+     -d "client_secret=ВАШ_SECRET_KEY" \
+     -d "code=ВАШ_CODE" \
+     -d "redirect_uri=http://localhost"
+   ```
+5. Из ответа JSON скопируйте `access_token`.
+6. Узнайте числовой ID своего резюме в личном кабинете SuperJob.
+
+### 2.5 Площадки без API-ключей
+
+Для **Хабр Карьеры**, **Авито Работы**, **Freelance.ru** и **Workzilla** API-ключи не требуются. Бот парсит публичные страницы этих площадок. Для включения достаточно установить переменную `ENABLE_*=true` в `.env`.
+
+> ⚠️ **Авто-отклик** на этих площадках невозможен — бот только находит и показывает вакансии/проекты в Telegram-чате. Откликаться нужно вручную по ссылке.
+
 ---
 
 ## 3. Настройка `.env`
@@ -98,6 +123,20 @@ DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/jobhunter
 # === HeadHunter ===
 HH_ACCESS_TOKEN=ваш_access_token_от_hh
 HH_RESUME_ID=ваш_32_символьный_хэш_резюме
+
+# === SuperJob (опционально) ===
+# SUPERJOB_SECRET_KEY=ваш_secret_key
+# SUPERJOB_ACCESS_TOKEN=ваш_access_token
+# SUPERJOB_RESUME_ID=12345
+
+# === Включение площадок ===
+ENABLE_HH=true
+ENABLE_ZARPLATA=true
+ENABLE_SUPERJOB=false
+ENABLE_HABR=false
+ENABLE_AVITO=false
+ENABLE_FREELANCE_RU=false
+ENABLE_WORKZILLA=false
 
 # === Стартовые фильтры ===
 SEARCH_QUERY=Python OR Удаленно OR Backend
@@ -182,7 +221,7 @@ python -m app.main
 ```bash
 uv run pytest
 ```
-Ожидаемый результат: **87 passed, 5 skipped** (интеграционные тесты Postgres пропускаются, если не задана тестовая БД).
+Ожидаемый результат: **101 passed, 5 skipped** (интеграционные тесты Postgres пропускаются, если не задана тестовая БД).
 
 ### ✅ Шаг 2: Проверка бота в Telegram
 Откройте Telegram, найдите своего бота по username и отправьте `/start`.
@@ -213,3 +252,7 @@ docker compose -f docker-compose.test.yml down -v
 | `401 / 403 Forbidden` от HH | Истёк OAuth-токен HeadHunter | Обновите `HH_ACCESS_TOKEN` (п. 2.2) |
 | Бот не реагирует на команды | Сообщения отправлены с другого Telegram ID | Бот слушает строго `OWNER_CHAT_ID` |
 | `search_query не может быть пустым` | Введен пустой поисковый запрос | Укажите непустой текст в команде `/query` |
+| `Ни одна площадка не включена` | Все `ENABLE_*` установлены в `false` | Включите хотя бы одну площадку в `.env` |
+| SuperJob включён, но нет ключей | `ENABLE_SUPERJOB=true`, но не заполнены `SUPERJOB_*` | Заполните `SUPERJOB_SECRET_KEY`, `SUPERJOB_ACCESS_TOKEN`, `SUPERJOB_RESUME_ID` |
+| Скрапинг-площадка не находит вакансий | Площадка обновила вёрстку или включила антибот-защиту | Проверьте логи; селекторы могут потребовать обновления |
+
