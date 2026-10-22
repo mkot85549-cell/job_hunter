@@ -1,6 +1,18 @@
 # Job Hunter Telegram Bot
 
-Интерактивный Telegram-бот для автоматического поиска и отклика на вакансии на платформах **HeadHunter (hh.ru)** и **Zarplata.ru** с поддержкой двух режимов работы (Авто-пилот и Ручной разбор) и управлением прямо из чата.
+Интерактивный Telegram-бот для автоматического поиска и отклика на вакансии на **7 платформах** с поддержкой двух режимов работы (Авто-пилот и Ручной разбор) и управлением прямо из чата.
+
+### Поддерживаемые площадки
+
+| Площадка | Тип доступа | Авто-отклик | Примечание |
+|---|:---:|:---:|---|
+| **HeadHunter (hh.ru)** | OAuth API | ✅ Да | Основная платформа |
+| **Зарплата.ру** | OAuth API (единое с HH) | ✅ Да | Тот же токен, что и HH |
+| **SuperJob** | OAuth API | ✅ Да | Требует отдельный API-ключ |
+| **Хабр Карьера** | Web scraping (JSON/XHR) | ❌ Только просмотр | Вакансии показываются в чате |
+| **Авито Работа** | Web scraping (HTML) | ❌ Только просмотр | Вакансии показываются в чате |
+| **Freelance.ru** | Web scraping (HTML) | ❌ Только просмотр | Проекты показываются в чате |
+| **Workzilla** | Web scraping (HTML) | ❌ Только просмотр | Задания показываются в чате |
 
 ---
 
@@ -23,17 +35,44 @@
 
 Создайте файл `.env` в корне проекта (на основе шаблона `.env.example`):
 
-| Переменная | Обязательная | Описание |
+### Обязательные переменные
+
+| Переменная | Описание |
+|---|---|
+| `BOT_TOKEN` | Токен Telegram-бота от `@BotFather` |
+| `OWNER_CHAT_ID` | Числовой Telegram ID владельца (узнать: [@userinfobot](https://t.me/userinfobot)) |
+| `DATABASE_URL` | Подключение к PostgreSQL: `postgresql+asyncpg://postgres:postgres@db:5432/jobhunter` |
+| `HH_ACCESS_TOKEN` | OAuth Access Token API HeadHunter (см. [launch_guide.md](launch_guide.md)) |
+| `HH_RESUME_ID` | 32-символьный хэш резюме с HeadHunter |
+
+### SuperJob (опционально)
+
+| Переменная | Описание |
+|---|---|
+| `SUPERJOB_SECRET_KEY` | API Secret Key от SuperJob |
+| `SUPERJOB_ACCESS_TOKEN` | OAuth Access Token SuperJob |
+| `SUPERJOB_RESUME_ID` | Числовой ID резюме на SuperJob |
+
+### Переключатели площадок
+
+| Переменная | По умолчанию | Описание |
 |---|:---:|---|
-| `BOT_TOKEN` | Да | Токен Telegram-бота от `@BotFather` |
-| `OWNER_CHAT_ID` | Да | Числовой Telegram ID владельца (узнать: [@userinfobot](https://t.me/userinfobot)) |
-| `DATABASE_URL` | Да | Подключение к PostgreSQL: `postgresql+asyncpg://postgres:postgres@db:5432/jobhunter` |
-| `HH_ACCESS_TOKEN` | Да | OAuth Access Token API HeadHunter (см. [launch_guide.md](launch_guide.md)) |
-| `HH_RESUME_ID` | Да | 32-символьный хэш резюме с HeadHunter |
-| `SEARCH_QUERY` | Нет | Начальный поисковый запрос (по умолчанию: `Оператор чата OR Менеджер OR Поддержка`) |
-| `REMOTE_ONLY` | Нет | Искать только удаленную работу (`true`/`false`, по умолчанию: `true`) |
-| `POLL_INTERVAL_SECONDS` | Нет | Интервал между циклами поиска в секундах (по умолчанию: `300`) |
-| `DEFAULT_COVER_LETTER` | Нет | Текст сопроводительного письма по умолчанию |
+| `ENABLE_HH` | `true` | HeadHunter (hh.ru) |
+| `ENABLE_ZARPLATA` | `true` | Зарплата.ру |
+| `ENABLE_SUPERJOB` | `false` | SuperJob (требует отдельный API-ключ) |
+| `ENABLE_HABR` | `false` | Хабр Карьера (только просмотр вакансий) |
+| `ENABLE_AVITO` | `false` | Авито Работа (только просмотр вакансий) |
+| `ENABLE_FREELANCE_RU` | `false` | Freelance.ru (только просмотр проектов) |
+| `ENABLE_WORKZILLA` | `false` | Workzilla (только просмотр заданий) |
+
+### Фильтры поиска
+
+| Переменная | По умолчанию | Описание |
+|---|---|---|
+| `SEARCH_QUERY` | `Оператор чата OR Менеджер OR Поддержка` | Начальный поисковый запрос |
+| `REMOTE_ONLY` | `true` | Искать только удаленную работу |
+| `POLL_INTERVAL_SECONDS` | `300` | Интервал между циклами поиска (сек) |
+| `DEFAULT_COVER_LETTER` | `Здравствуйте! ...` | Текст сопроводительного письма |
 
 > **ВАЖНО для существующих установок:**
 > После обновления добавьте переменную `OWNER_CHAT_ID` (или оставьте `TELEGRAM_CHAT_ID` — поддерживаются оба имени благодаря `AliasChoices`). Без указания ID владельца бот не запустится в целях безопасности.
@@ -109,7 +148,7 @@ uv run python -m app.main
 ```bash
 uv run pytest
 ```
-*Результат: 87 passed, 5 skipped.*
+*Результат: 101 passed, 5 skipped.*
 
 ### Интеграционные тесты на PostgreSQL
 Для проверки работы на реальном экземпляре PostgreSQL:
